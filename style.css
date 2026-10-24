@@ -127,10 +127,19 @@ html, body {
   object-fit: cover;
   display: block;
   border-radius: 28px;
-  transition: transform 0.4s ease;
+  transition: transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity, filter;
 }
 
-.artwork-container:hover .album-art {
+.album-art.is-switching {
+  opacity: 0.25;
+  transform: scale(0.95) translateY(4px);
+  filter: blur(6px);
+}
+
+.artwork-container:hover .album-art:not(.is-switching) {
   transform: scale(1.02);
 }
 
@@ -140,6 +149,14 @@ html, body {
 .track-info {
   margin-bottom: 20px;
   width: 300px;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+.track-info.is-switching {
+  opacity: 0;
+  transform: translateY(8px);
 }
 
 .track-title-wrapper {
@@ -710,6 +727,15 @@ html, body {
   overflow: hidden;
   padding: 0 48px;
   user-select: none;
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.40s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.lyrics-masked-container.is-switching {
+  opacity: 0.15;
+  transform: translateY(10px) scale(0.985);
+}
   
   /* Top and bottom linear opacity mask */
   mask-image: linear-gradient(

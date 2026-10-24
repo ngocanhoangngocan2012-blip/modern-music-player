@@ -759,6 +759,7 @@
   const trackTitleInner = document.getElementById('trackTitleInner');
   const trackTitle = document.getElementById('trackTitle');
   const trackArtist = document.getElementById('trackArtist');
+  const trackInfoEl = document.querySelector('.track-info');
 
   const currentTimeEl = document.getElementById('currentTime');
   const totalDurationEl = document.getElementById('totalDuration');
@@ -1174,12 +1175,38 @@
   }, { passive: false });
 
   // ==========================================================================
-  // LOAD SONG INTO PLAYER
+  // LOAD SONG INTO PLAYER WITH ULTRA-SMOOTH SUBTLE UI TRANSITION
   // ==========================================================================
-  function loadTrack(index) {
+  let trackSwitchTimer = null;
+
+  function loadTrack(index, animate = true) {
     currentTrackIndex = (index + playlist.length) % playlist.length;
     const track = playlist[currentTrackIndex];
 
+    if (animate) {
+      // Trigger subtle exit transition (slight scale down, fade, and soft blur)
+      if (albumArt) albumArt.classList.add('is-switching');
+      if (trackInfoEl) trackInfoEl.classList.add('is-switching');
+      if (lyricsMaskedContainer) lyricsMaskedContainer.classList.add('is-switching');
+
+      clearTimeout(trackSwitchTimer);
+      trackSwitchTimer = setTimeout(() => {
+        applyTrackData(track);
+
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (albumArt) albumArt.classList.remove('is-switching');
+            if (trackInfoEl) trackInfoEl.classList.remove('is-switching');
+            if (lyricsMaskedContainer) lyricsMaskedContainer.classList.remove('is-switching');
+          });
+        });
+      }, 95);
+    } else {
+      applyTrackData(track);
+    }
+  }
+
+  function applyTrackData(track) {
     // Automatically adapt typography font for Vietnamese tracks
     updateTrackFontTheme(track);
 
