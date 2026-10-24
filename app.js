@@ -1494,13 +1494,12 @@
   });
 
   audio.addEventListener('ended', () => {
-    const track = playlist[currentTrackIndex];
-    if (track && track.isPendingFullAudio) {
-      showToast('Đang kết nối bản FULL đầy đủ...');
-      return;
-    }
     loadTrack(currentTrackIndex + 1);
-    if (isPlaying) audio.play();
+    audio.play().then(() => {
+      isPlaying = true;
+      playIcon.style.display = 'none';
+      pauseIcon.style.display = 'block';
+    }).catch(() => {});
   });
 
   // ==========================================================================
@@ -2308,6 +2307,7 @@
     });
 
     searchResultsContainer.innerHTML = html;
+    prefetchTopResult(results);
 
     const itemEls = searchResultsContainer.querySelectorAll('.search-result-item');
     itemEls.forEach(el => {
@@ -2343,6 +2343,7 @@
           const lines = lrcData.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
           const step = (newTrack.duration || 180) / Math.max(1, lines.length);
           newTrack.lyrics = lines.map((t, i) => ({ time: +(i * step).toFixed(2), text: t }));
+          updateTrackFontTheme(newTrack);
           if (playlist[currentTrackIndex] === newTrack) {
             renderLyrics(newTrack);
             updateLyrics(audio.currentTime, true, true);
@@ -2355,6 +2356,7 @@
           const sData = await sRes.json();
           if (Array.isArray(sData) && sData.length > 0 && sData[0].syncedLyrics) {
             newTrack.lyrics = parseLRC(sData[0].syncedLyrics);
+            updateTrackFontTheme(newTrack);
             if (playlist[currentTrackIndex] === newTrack) {
               renderLyrics(newTrack);
               updateLyrics(audio.currentTime, true, true);
@@ -2368,48 +2370,22 @@
     }
   }
 
-  function fetchFullAudioForTrack(newTrack, item) {
-    const q = `${item.trackName} ${item.artistName}`;
-    const id = item.id || ('online_' + Date.now());
-
-    fetch(`/api/full-track?q=${encodeURIComponent(q)}&id=${encodeURIComponent(id)}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.success && data.src) {
-          newTrack.src = data.src;
-          const fullDur = data.duration || newTrack.fullDuration || newTrack.duration;
-          newTrack.duration = fullDur;
-          newTrack.fullDuration = fullDur;
-          newTrack.isPendingFullAudio = false;
-
-          // If this track is currently active:
-          if (playlist[currentTrackIndex] === newTrack) {
-            const wasPlaying = !audio.paused;
-            const currentPos = audio.currentTime;
-            audio.src = data.src;
-            audio.currentTime = currentPos;
-            if (wasPlaying) {
-              audio.play().then(() => {
-                isPlaying = true;
-                playIcon.style.display = 'none';
-                pauseIcon.style.display = 'block';
-              }).catch(() => {});
-            }
-            totalDurationEl.textContent = formatTime(fullDur);
-            updateProgress();
-            showToast(`✦ Đã mở khóa bản FULL đầy đủ (${formatTime(fullDur)})!`);
-          }
-        }
-      })
-      .catch(err => {
-        console.warn('Full track load error:', err);
-      });
+  function prefetchTopResult(results) {
+    if (!results || results.length === 0) return;
+    for (let i = 0; i < Math.min(2, results.length); i++) {
+      const item = results[i];
+      if (!item || item.isLocal || (item.previewUrl && item.previewUrl.startsWith('cache/'))) continue;
+      const q = `${item.trackName} ${item.artistName}`;
+      const id = item.id;
+      fetch(`/api/full-track?q=${encodeURIComponent(q)}&id=${encodeURIComponent(id)}`).catch(() => {});
+    }
   }
 
   async function playSearchResultItem(index) {
     if (index < 0 || index >= currentSearchResults.length) return;
     const item = currentSearchResults[index];
 
+    // Local track already in playlist
     if (item.isLocal && item.rawTrack) {
       const plIndex = playlist.findIndex(t => t.id === item.rawTrack.id);
       if (plIndex !== -1) {
@@ -2425,44 +2401,78 @@
       }
     }
 
-    // Online song: Start immediately with preview / cached version, then hot-swap full track
     const isAlreadyCached = item.previewUrl && item.previewUrl.startsWith('cache/');
-    showToast(isAlreadyCached 
-      ? `Đang phát bản FULL: ${item.trackName} - ${item.artistName}` 
-      : `Đang phát & Tải bản FULL: ${item.trackName}...`
-    );
-
     const newTrack = {
       id: item.id || ('online_' + Date.now()),
       title: item.trackName,
       fullTitle: item.trackName,
       artist: item.artistName,
       cover: item.artworkUrl,
-      src: item.previewUrl,
+      src: isAlreadyCached ? item.previewUrl : '',
       duration: item.duration || 180,
       fullDuration: item.duration || 180,
-      isPendingFullAudio: !isAlreadyCached,
       lyrics: null
     };
 
     playlist.push(newTrack);
     const newIndex = playlist.length - 1;
     loadTrack(newIndex);
-
-    audio.play().then(() => {
-      isPlaying = true;
-      playIcon.style.display = 'none';
-      pauseIcon.style.display = 'block';
-    }).catch(() => {});
-
     closeSearchModal();
 
-    // 1. Fetch Synced Lyrics
+    // 1. Fetch Synced Lyrics in parallel
     fetchSyncedLyricsForTrack(newTrack, item);
 
-    // 2. Fetch Full Audio if not already local
-    if (!isAlreadyCached) {
-      fetchFullAudioForTrack(newTrack, item);
+    // 2. If already cached, play immediately!
+    if (isAlreadyCached) {
+      audio.src = item.previewUrl;
+      audio.play().then(() => {
+        isPlaying = true;
+        playIcon.style.display = 'none';
+        pauseIcon.style.display = 'block';
+      }).catch(() => {});
+      showToast(`Đang phát bản FULL: ${item.trackName} - ${item.artistName}`);
+      return;
+    }
+
+    // 3. Not cached yet: Fetch FULL track and play it directly from 0:00!
+    showToast(`Đang nạp bản FULL đầy đủ: ${item.trackName}...`);
+    playIcon.style.display = 'none';
+    pauseIcon.style.display = 'block';
+
+    const q = `${item.trackName} ${item.artistName}`;
+    const id = item.id || ('online_' + Date.now());
+
+    try {
+      const res = await fetch(`/api/full-track?q=${encodeURIComponent(q)}&id=${encodeURIComponent(id)}`);
+      const data = await res.json();
+
+      if (data && data.success && data.src) {
+        newTrack.src = data.src;
+        const fullDur = data.duration || newTrack.fullDuration || newTrack.duration;
+        newTrack.duration = fullDur;
+        newTrack.fullDuration = fullDur;
+
+        if (playlist[currentTrackIndex] === newTrack) {
+          audio.src = data.src;
+          totalDurationEl.textContent = formatTime(fullDur);
+          audio.play().then(() => {
+            isPlaying = true;
+            playIcon.style.display = 'none';
+            pauseIcon.style.display = 'block';
+          }).catch(() => {});
+          showToast(`✦ Đang phát bản FULL đầy đủ (${formatTime(fullDur)})!`);
+        }
+      } else {
+        throw new Error(data?.error || 'Full audio failed');
+      }
+    } catch (err) {
+      console.warn('Backend full audio error:', err);
+      if (item.previewUrl && playlist[currentTrackIndex] === newTrack) {
+        newTrack.src = item.previewUrl;
+        audio.src = item.previewUrl;
+        audio.play().catch(() => {});
+        showToast(`Đang phát: ${item.trackName}`);
+      }
     }
   }
 
