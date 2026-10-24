@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Music Player</title>
+  <!-- Google Fonts: DM Sans & Be Vietnam Pro (Dedicated Vietnamese Typography) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600;1,700&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Dynamic blurred background with adaptive luminance brightness -->
+  <div class="bg-container">
+    <div class="bg-blur" id="bgBlur"></div>
+    <div class="bg-overlay" id="bgOverlay"></div>
+  </div>
+
+  <!-- Offscreen canvas for luminance detection -->
+  <canvas id="luminanceCanvas" width="64" height="64" style="display: none;"></canvas>
+
+  <!-- Floating Liquid Glass Search Trigger Pill (Shift + S) -->
+  <button class="search-trigger-pill" id="searchTriggerPill" title="Tìm bài hát toàn cầu (Shift + S)">
+    <svg class="search-icon-sm" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <circle cx="11" cy="11" r="7"/>
+      <line x1="16.5" y1="16.5" x2="21" y2="21"/>
+    </svg>
+    <span>Tìm nhạc</span>
+    <kbd class="shortcut-tag">Shift + S</kbd>
+  </button>
+
+  <!-- Main Player Layout -->
+  <main class="player-wrapper" id="playerWrapper">
+    <!-- Left Column: Music Player Controls & Art -->
+    <section class="player-col">
+      <!-- Album Cover -->
+      <div class="artwork-container">
+        <img id="albumArt" class="album-art" src="assets/roar.png" alt="Album Cover" />
+      </div>
+
+      <!-- Track Info with Smooth Fade & Ping-pong Marquee -->
+      <div class="track-info">
+        <div class="track-title-wrapper" id="trackTitleWrapper">
+          <div class="track-title-inner" id="trackTitleInner">
+            <h1 class="track-title" id="trackTitle">I can't handle change</h1>
+          </div>
+        </div>
+        <p class="track-artist" id="trackArtist">ROAR</p>
+      </div>
+
+      <!-- Progress Section with Interactive Scrubber & Time Preview -->
+      <div class="progress-section" id="progressSection">
+        <div class="time-display">
+          <span id="currentTime">0:00</span>
+          <span id="totalDuration">3:18</span>
+        </div>
+        <div class="progress-bar-container" id="progressBarContainer" role="slider" aria-label="Audio scrubber" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+          <div class="progress-track" id="progressTrack">
+            <div class="progress-hover-fill" id="progressHoverFill"></div>
+            <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+            <div class="progress-thumb" id="progressThumb" style="left: 0%;"></div>
+          </div>
+          <div class="progress-tooltip" id="progressTooltip">0:00</div>
+        </div>
+      </div>
+
+      <!-- Playback Controls + Volume Button -->
+      <div class="controls-row">
+        <!-- Spacer placeholder keeps Prev, Play, Next perfectly centered -->
+        <div class="ctrl-spacer"></div>
+
+        <!-- Previous Button -->
+        <button class="ctrl-btn prev-btn" id="prevBtn" aria-label="Previous">
+          <svg class="ctrl-icon prev-icon" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="3.5" y="4" width="2.5" height="16" rx="1.25"/>
+            <path d="M19.2 5.35c0-.98-1.07-1.58-1.9-.99L8.6 11.01a1.2 1.2 0 0 0 0 1.98l8.7 6.65c.83.59 1.9-.01 1.9-.99V5.35z"/>
+          </svg>
+        </button>
+
+        <!-- Play / Pause Button -->
+        <button class="ctrl-btn play-btn" id="playBtn" aria-label="Play / Pause">
+          <!-- Play Icon: Smooth solid rounded triangle -->
+          <svg class="ctrl-icon play-icon" id="playIcon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 4.7c0-.96 1.05-1.55 1.87-.98l11.4 7.3a1.18 1.18 0 0 1 0 1.96l-11.4 7.3A1.17 1.17 0 0 1 7 19.3V4.7z"/>
+          </svg>
+          <!-- Pause Icon: Exact 2 rounded capsule pills matching reference -->
+          <svg class="ctrl-icon pause-icon" id="pauseIcon" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+            <rect x="5" y="3" width="4.5" height="18" rx="2.25"/>
+            <rect x="14.5" y="3" width="4.5" height="18" rx="2.25"/>
+          </svg>
+        </button>
+
+        <!-- Next Button -->
+        <button class="ctrl-btn next-btn" id="nextBtn" aria-label="Next">
+          <svg class="ctrl-icon next-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M4.8 5.35c0-.98 1.07-1.58 1.9-.99l8.7 6.65a1.2 1.2 0 0 1 0 1.98l-8.7 6.65c-.83.59-1.9-.01-1.9-.99V5.35z"/>
+            <rect x="18" y="4" width="2.5" height="16" rx="1.25"/>
+          </svg>
+        </button>
+
+        <!-- Volume Button & Floating Slider Capsule -->
+        <div class="volume-control-wrapper" id="volumeControlWrapper">
+          <button class="ctrl-btn volume-btn" id="volumeBtn" aria-label="Volume">
+            <!-- High Volume Icon: Minimalist sleek speaker cone matching reference -->
+            <svg class="ctrl-icon volume-icon" id="volumeHighIcon" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3.5 10c0-.83.67-1.5 1.5-1.5H8l6.3-5.25a1 1 0 0 1 1.7.75v16a1 1 0 0 1-1.7.75L8 15.5H5c-.83 0-1.5-.67-1.5-1.5v-4z"/>
+            </svg>
+            <!-- Low Volume Icon -->
+            <svg class="ctrl-icon volume-icon" id="volumeLowIcon" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+              <path d="M3.5 10c0-.83.67-1.5 1.5-1.5H8l6.3-5.25a1 1 0 0 1 1.7.75v16a1 1 0 0 1-1.7.75L8 15.5H5c-.83 0-1.5-.67-1.5-1.5v-4z"/>
+            </svg>
+            <!-- Muted Volume Icon: Clean strike-through -->
+            <svg class="ctrl-icon volume-icon" id="volumeMuteIcon" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+              <path d="M3.5 10c0-.83.67-1.5 1.5-1.5H8l6.3-5.25a1 1 0 0 1 1.7.75v16a1 1 0 0 1-1.7.75L8 15.5H5c-.83 0-1.5-.67-1.5-1.5v-4z"/>
+              <line x1="18" y1="9" x2="22" y2="15" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+              <line x1="22" y1="9" x2="18" y2="15" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+          </button>
+
+          <!-- Floating Volume Slider Popup with White Thumb Handle & Percentage -->
+          <div class="volume-slider-box" id="volumeSliderBox">
+            <div class="volume-slider-inner">
+              <div class="volume-track-hitarea" id="volumeTrackHitarea">
+                <div class="volume-track" id="volumeTrack">
+                  <div class="volume-fill" id="volumeFill" style="width: 80%;"></div>
+                  <div class="volume-thumb" id="volumeThumb" style="left: 80%;"></div>
+                </div>
+              </div>
+              <span class="volume-percentage" id="volumePercentage">80%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload Music Box -->
+      <div class="upload-box" id="uploadBox" title="Click or drag & drop to upload music">
+        <input type="file" id="fileInput" accept="audio/*,.lrc" multiple style="display: none;" />
+        <div class="upload-content">
+          <svg class="plus-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span class="upload-tooltip" id="uploadTooltip">Upload music / LRC</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Lyrics Card with gradient mask & cascade scale animation -->
+    <section class="lyrics-card" id="lyricsCard">
+      <!-- Fullscreen Toggle Button -->
+      <button class="fullscreen-btn" id="fullscreenBtn" title="Toggle Fullscreen" aria-label="Toggle Fullscreen">
+        <svg class="fs-icon fs-expand" id="fsExpandIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <polyline points="9 21 3 21 3 15"></polyline>
+          <line x1="21" y1="3" x2="14" y2="10"></line>
+          <line x1="3" y1="21" x2="10" y2="14"></line>
+        </svg>
+        <svg class="fs-icon fs-collapse" id="fsCollapseIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+          <polyline points="4 14 10 14 10 20"></polyline>
+          <polyline points="20 10 14 10 14 4"></polyline>
+          <line x1="14" y1="10" x2="21" y2="3"></line>
+          <line x1="3" y1="21" x2="10" y2="14"></line>
+        </svg>
+      </button>
+
+      <!-- Lyrics Masked Scroll Container -->
+      <div class="lyrics-masked-container" id="lyricsMaskedContainer">
+        <div class="lyrics-track" id="lyricsTrack">
+          <!-- Real synced lyrics lines rendered here -->
+        </div>
+
+        <!-- Empty state when no lyrics are present -->
+        <div class="no-lyrics-state" id="noLyricsState" style="display: none;">
+          <p class="no-lyrics-msg">sorry, this song doesn’t have lyrics</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Real Audio Element -->
+  <audio id="audioPlayer" src="assets/roar.mp3" preload="auto"></audio>
+
+  <!-- Sleek Toast Notification -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Floating Seek Feedback HUD -->
+  <div class="seek-hud" id="seekHud">
+    <svg class="seek-hud-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+      <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+    </svg>
+    <span class="seek-hud-text" id="seekHudText">0:00</span>
+  </div>
+
+  <!-- ========================================================================
+       GLOBAL MUSIC & SYNCED LYRICS SEARCH POPUP (Shift + S)
+       ======================================================================== -->
+  <div class="search-modal-backdrop" id="searchModalBackdrop" style="display: none;">
+    <div class="search-modal-card" id="searchModalCard">
+      <!-- Modal Header -->
+      <div class="search-modal-header" id="searchModalHeader">
+        <div class="search-header-controls">
+          <div class="search-input-pill" id="searchInputPill">
+            <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+              <circle cx="11" cy="11" r="7"/>
+              <line x1="16.5" y1="16.5" x2="21" y2="21"/>
+            </svg>
+            <input type="text" id="globalSearchInput" placeholder="Tìm kiếm mọi bài hát, nghệ sĩ trên thế giới..." autocomplete="off" spellcheck="false" />
+            <button class="search-clear-btn" id="searchClearBtn" aria-label="Xoá tìm kiếm" style="display: none;">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.4" fill="none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <kbd class="esc-badge" id="escBadge">Esc</kbd>
+          </div>
+
+          <button class="modal-close-pill" id="modalCloseBtn" aria-label="Đóng popup">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Filter Chips -->
+      <div class="search-chips-row">
+        <button class="search-chip active" data-filter="all">Tất cả</button>
+        <button class="search-chip" data-filter="synced">Có Synced Lyrics</button>
+        <button class="search-chip" data-filter="trending">Trending TikTok</button>
+        <button class="search-chip" data-filter="local">Nhạc đã tải</button>
+      </div>
+
+      <!-- Results List Container with smooth glass scrolling -->
+      <div class="search-results-container" id="searchResultsContainer">
+        <!-- Results injected dynamically -->
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="search-modal-footer">
+        <div class="footer-hint">
+          <span class="hint-item"><kbd>Shift + S</kbd> Tìm kiếm</span>
+          <span class="hint-item"><kbd>Enter</kbd> Chọn phát</span>
+          <span class="hint-item"><kbd>Esc</kbd> Đóng</span>
+        </div>
+        <div class="footer-badge">
+          <span class="pulse-dot"></span>
+          <span>Global Music & Synced Lyrics (100M+ Songs)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
