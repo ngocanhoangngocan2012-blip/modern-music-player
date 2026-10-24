@@ -1042,6 +1042,7 @@
     }
 
     lyricsTrack.style.display = 'flex';
+    lyricsTrack.style.flexDirection = 'column';
     noLyricsState.style.display = 'none';
 
     updateTrackFontTheme(track);
